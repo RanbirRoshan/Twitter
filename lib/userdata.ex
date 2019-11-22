@@ -41,7 +41,6 @@ defmodule UserDataServer do
 
   @impl true
   def handle_call({:CreateUser, userData}, _from, state) do
-
     {isValid, errorString}= validateUser(userData)
     {ret, errorString, state} =
     if (isValid) do
@@ -64,6 +63,21 @@ defmodule UserDataServer do
     else
       {:bad, errorString, state}
     end
+    {:reply, {ret, errorString}, state}
+  end
+
+  @impl true
+  def handle_call({:DeleteUser, userId}, _from, state) do
+    {ret, errorString, state} =
+      if Map.has_key?(state.userDataMap, String.to_atom(userId)) do
+        #not unique
+        userMap = Map.delete(state.userDataMap, String.to_atom(userId))
+        #session delete
+        state = %{state | :userDataMap => userMap}
+        {:ok, "Success", state}
+      else
+        {:bad, "Invalid User ID", state}
+      end
     {:reply, {ret, errorString}, state}
   end
 
