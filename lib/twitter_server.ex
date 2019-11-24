@@ -62,7 +62,7 @@ defmodule TwitterCoreServer do
 
     if ret == :ok do
       {server_pid, _} = getDS(name, state)# Enum.at(state.userDataMap, 0)
-      newUser = %UserInfo{userId: name, password: password}
+      newUser = %UserInfo{userId: name, password: password, tweets: []}
       {ret, reason} = GenServer.call(server_pid, {:CreateUser, newUser})
       {:reply, {ret, reason}, state}
     else
@@ -77,20 +77,24 @@ defmodule TwitterCoreServer do
 
   @impl true
   def handle_call({:PostTweet, name, password, tweet}, _from, state) do
-    {server_pid, _} = getDS(name, state)
-    {result, user} = GenServer.call(server_pid, {:GetUserById, name})
-    if result == :ok do
-      if (validateUser(name, password, user)) do
-        {tweet_server_pid, ds_pos} = getDS(tweet, state)
-        {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, tweet})
-        user.tweets = user.tweets ++ [{ds_pos, tweet_id}]
-        GenServer.call(tweet_server_pid, {:UpdateUser, tweet})
-        {:reply, {:ok, "Post to db not implemented"}, state}
+    tweet = stringTrim(tweet)
+    if isStringNonEmpty(tweet) do
+      {server_pid, _} = getDS(name, state)
+      {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+      if result == :ok do
+        if (validateUser(name, password, user)) do
+          {tweet_server_pid, ds_pos} = getDS(convertToLower(tweet), state)
+          {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, tweet})
+          updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}]}
+          {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
+        else
+          {:reply, {:bad, "Invalid user id or password"}, state}
+        end
       else
         {:reply, {:bad, "Invalid user id or password"}, state}
       end
     else
-      {:reply, {:bad, "Invalid user id or password"}, state}
+      {:reply, {:bad, "Tweets cannot be empty"}, state}
     end
   end
 end

@@ -65,7 +65,7 @@ defmodule UserDataServer do
   def handle_call({:UpdateUser, user}, _from, state) do
     data = :ets.lookup(state.userTable, user.userId)
     if Enum.count(data) > 0 do
-      :ets.insert(state.userTable, user.userId, user)
+      :ets.insert(state.userTable, {user.userId, user})
       {:reply, {:ok, "Success"}, state}
     else
       {:reply, {:bad, "Invalid User ID"}, state}
