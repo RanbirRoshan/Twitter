@@ -1,5 +1,5 @@
 defmodule UserInfo do
-  defstruct userId: "", password: ""
+  defstruct userId: "", password: "", tweets: []
 end
 
 defmodule UserDataServer do
@@ -10,75 +10,65 @@ defmodule UserDataServer do
     :world
   end
 
-  def validateNonEmptyString(data, label) do
-    if String.length(data) == 0 do
-      {false, label <> " cannot be empty"}
-    else
-      {true, "success"}
-    end
-  end
-
-  def validateUser(data) do
-    {valid, err_str} = validateNonEmptyString(data.userId, "UserId")
-
-    if valid do
-      validateNonEmptyString(data.password, "Password")
-    else
-      {valid, err_str}
-    end
-  end
-
   @impl true
   def init(init_arg) do
-    state = %{:userDataMap => %{}}
+    user_table = :ets.new(:user_lookup, [:set, :protected])
+    tweet_table = :ets.new(:tweet_lookup, [:set, :protected])
+    state = %{:userTable => user_table, :tweetTable => tweet_table, :tweetCount => 0}
     {:ok, state}
-  end
-
-  def start(args) do
-    state = %{:userDataMap => %{}}
-    GenServer.start(__MODULE__, state, [])
   end
 
   @impl true
   def handle_call({:CreateUser, userData}, _from, state) do
-    {isValid, errorString}= validateUser(userData)
-    {ret, errorString, state} =
-    if (isValid) do
-      # check if the user id is unique
-      {status, reason} =
-      if Map.has_key?(state.userDataMap, String.to_atom(userData.userId)) do
-        #not unique
-        {:bad, "UserId already in use"}
-      else
-        {:ok, "Success"}
-      end
-      # insert the user as registered user
-      if status == :bad do
-        {status, reason, state}
-      else
-        userMap = Map.put(state.userDataMap, String.to_atom(userData.userId), userData)
-        state = %{state | :userDataMap => userMap}
-        {:ok, reason, state}
-      end
+
+    is_new = :ets.insert_new(state.userTable, {userData.userId, userData})
+
+    if is_new do
+      {:reply, {:ok, "Success"}, state}
     else
-      {:bad, errorString, state}
+      {:reply, {:bad, "UserId already in use"}, state}
     end
-    {:reply, {ret, errorString}, state}
   end
 
   @impl true
   def handle_call({:DeleteUser, userId}, _from, state) do
-    {ret, errorString, state} =
-      if Map.has_key?(state.userDataMap, String.to_atom(userId)) do
-        #not unique
-        userMap = Map.delete(state.userDataMap, String.to_atom(userId))
-        #session delete
-        state = %{state | :userDataMap => userMap}
-        {:ok, "Success", state}
-      else
-        {:bad, "Invalid User ID", state}
-      end
-    {:reply, {ret, errorString}, state}
+    #IO.inspect(userId)
+    data = :ets.lookup(state.userTable, userId)
+    if Enum.count(data) > 0 do
+      :ets.delete(state.userTable, userId)
+      {:reply, {:ok, "Success"}, state}
+    else
+      {:reply, {:bad, "Invalid User ID"}, state}
+    end
   end
 
+  @impl true
+  def handle_call({:GetUserById, userId}, _from, state) do
+    data = :ets.lookup(state.userTable, userId)
+    if Enum.count(data) > 0 do
+      {_id, user} = Enum.at(data, 0)
+      {:reply, {:ok, user}, state}
+    else
+      {:reply, {:bad, "Invalid User ID"}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:Tweet, tweet}, _from, state) do
+    tweet_id = state.tweetCount
+    state = %{state | :tweetCount=>tweet_id+1}
+    :ets.insert_new(state.tweetTable, {tweet_id,tweet})
+    {:reply, {:ok, tweet_id}, state}
+  end
+
+  @impl true
+  def handle_call({:UpdateUser, user}, _from, state) do
+    data = :ets.lookup(state.userTable, user.userId)
+    if Enum.count(data) > 0 do
+      :ets.insert(state.userTable, user.userId, user)
+      {:reply, {:ok, "Success"}, state}
+    else
+      {:reply, {:bad, "Invalid User ID"}, state}
+    end
+  end
 end

@@ -34,4 +34,20 @@ defmodule Twitter do
     nextProcessorpid = Enum.at(state.processors, nextProcessorPos)
     {:reply, {:redirect, nextProcessorpid}, state}
   end
+
+  @impl true
+  def handle_call({:Login, name, password}, _from, state) do
+    nextProcessorPos = state.lastProcessorServer
+    state = %{state | :lastProcessorServer => rem(state.lastProcessorServer+1, state.processorCount)}
+    nextProcessorpid = Enum.at(state.processors, nextProcessorPos)
+    {:reply, {:redirect, nextProcessorpid}, state}
+  end
+
+  @impl true
+  def handle_call({:PostTweet, name, password, tweet}, _from, state) do
+    nextProcessorPos = state.lastProcessorServer
+    state = %{state | :lastProcessorServer => rem(state.lastProcessorServer+1, state.processorCount)}
+    nextProcessorpid = Enum.at(state.processors, nextProcessorPos)
+    {:reply, {:redirect, nextProcessorpid}, state}
+  end
 end

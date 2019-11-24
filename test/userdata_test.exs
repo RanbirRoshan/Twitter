@@ -5,13 +5,11 @@ defmodule UserDataServerTest do
   test "CreateUser" do
     {:ok, server_pid} = GenServer.start(UserDataServer, %{})
     newUser = %UserInfo{userId: "", password: "roshan"}
-    {ret, reason} = GenServer.call(server_pid, {:CreateUser, newUser})
-    assert ret == :bad
-    assert reason == "UserId cannot be empty"
-    newUser = %UserInfo{userId: "ranbir", password: ""}
-    {ret, reason} = GenServer.call(server_pid, {:CreateUser, newUser})
-    assert ret == :bad
-    assert reason == "Password cannot be empty"
+    {ret, _reason} = GenServer.call(server_pid, {:CreateUser, newUser})
+    assert ret == :ok
+    newUser = %UserInfo{userId: "ranbira", password: ""}
+    {ret, _reason} = GenServer.call(server_pid, {:CreateUser, newUser})
+    assert ret == :ok
     newUser = %UserInfo{userId: "ranbir", password: "roshan"}
     {ret, reason} = GenServer.call(server_pid, {:CreateUser, newUser})
     assert ret == :ok

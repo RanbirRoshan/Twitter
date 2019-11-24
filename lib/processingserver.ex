@@ -8,7 +8,6 @@ defmodule Controller do
   end
 
   def start(initial_state) do
-    #Logger.info("Starting server with an inital state: #{inspect initial_state}")
     GenServer.start(__MODULE__, initial_state, [])
   end
 
