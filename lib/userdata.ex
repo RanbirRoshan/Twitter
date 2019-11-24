@@ -1,5 +1,5 @@
 defmodule UserInfo do
-  defstruct userId: "", password: "", tweets: []
+  defstruct userId: "", password: "", tweets: [], subscribedTo: [], userDeleted: false
 end
 
 defmodule UserDataServer do
@@ -59,6 +59,12 @@ defmodule UserDataServer do
     state = %{state | :tweetCount=>tweet_id+1}
     :ets.insert_new(state.tweetTable, {tweet_id,tweet})
     {:reply, {:ok, tweet_id}, state}
+  end
+
+  @impl true
+  def handle_call({:GetTweet, tweet_id}, _from, state) do
+    [{tweet_id, tweet}] = :ets.lookup(state.tweetTable, tweet_id)
+    {:reply, {:ok, tweet}, state}
   end
 
   @impl true
