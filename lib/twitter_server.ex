@@ -11,8 +11,29 @@ defmodule TwitterCoreServer do
     String.trim(data)
   end
 
+  def postHashTagAndMentions(hashtag, mentions, state, tweet_server, tweet_id) do
+    for tag<-hashtag do
+      tag=convertToLower(tag)
+      {server_pid, pos} = getDS(String.at(tag, 1), state)
+      GenServer.call(server_pid, {:AddHashTagData, tag, tweet_server, tweet_id})
+    end
+    for mentionedUser<-mentions do
+      mentionedUser=convertToLower(mentionedUser)
+      {server_pid, pos} = getDS(String.slice(mentionedUser, 1..-1), state)
+      GenServer.call(server_pid, {:AddUserMention, String.slice(mentionedUser, 1..-1), tweet_server, tweet_id})
+    end
+  end
+
+  def getHashtagAndMentions(tweet) do
+    hashregex = ~r/\#\w+/
+    tags = List.flatten(Regex.scan(hashregex,tweet))
+    hashregex = ~r/\@\w+/
+    mentions = List.flatten(Regex.scan(hashregex,tweet))
+    {tags,mentions}
+  end
+
   def validateUser(name, password, userObj) do
-    if (name == userObj.userId && password == userObj.password) do
+    if (name == userObj.userId && password == userObj.password && userObj.userDeleted == false) do
       true
     else
       false
@@ -41,15 +62,29 @@ defmodule TwitterCoreServer do
     {valid, err_str} = validateNonEmptyString(name, "UserId")
 
     if valid == :ok do
-      validateNonEmptyString(password, "Password")
+
+      if String.contains?(name, " ") do
+        {:bad, "User name cannot contain spaces."}
+      else
+        if valid == :ok do
+          validateNonEmptyString(password, "Password")
+        else
+          {valid, err_str}
+        end
+      end
     else
       {valid, err_str}
     end
   end
 
+
   def getDS(word, state) do
     pos = hd(String.to_charlist(String.at(word, 0))) - hd('a')
-    {Enum.at(state.userDataMap, pos), pos}
+    if (pos >=0 && pos<=25) do
+      {Enum.at(state.userDataMap, pos), pos}
+    else
+      {Enum.at(state.userDataMap, 26), 26}
+    end
   end
 
   @impl true
@@ -83,18 +118,16 @@ defmodule TwitterCoreServer do
   @impl true
   def handle_call({:PostTweet, name, password, tweet}, _from, state) do
     tweet = stringTrim(tweet)
-    if isStringNonEmpty(tweet) do
+    if isStringNonEmpty(tweet) && isStringNonEmpty(name) do
       {server_pid, _} = getDS(name, state)
       {result, user} = GenServer.call(server_pid, {:GetUserById, name})
-      if result == :ok && user.userDeleted == false do
-        if (validateUser(name, password, user)) do
-          {tweet_server_pid, ds_pos} = getDS(convertToLower(tweet), state)
-          {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
-          updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo}
-          {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
-        else
-          {:reply, {:bad, "Invalid user id or password"}, state}
-        end
+      if result == :ok && (validateUser(name, password, user)) do
+        {tweet_server_pid, ds_pos} = getDS(convertToLower(tweet), state)
+        {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
+        {hashtag, mentions} = getHashtagAndMentions(tweet)
+        postHashTagAndMentions(hashtag, mentions, state, ds_pos, tweet_id)
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo}
+        {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
       else
         {:reply, {:bad, "Invalid user id or password"}, state}
       end
@@ -189,6 +222,45 @@ defmodule TwitterCoreServer do
       end
     else
       {:reply, {:bad, "Subscibing user name cannot be empty"}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:GetTweetsByHashTag, hashTag}, _from, state) do
+    hashTag = convertToLower(stringTrim(hashTag))
+    if(isStringNonEmpty(hashTag)) do
+      if (String.at(hashTag,0) == "#") do
+        {server_id, pos} = getDS(String.at(hashTag, 1), state)
+        {:ok, list} = GenServer.call(server_id, {:GetHashTagData, hashTag})
+        tweets=
+        for {ds_pos, tweet_id}<-list do
+          {:ok, tweet} = GenServer.call(Enum.at(state.userDataMap, ds_pos), {:GetTweet, tweet_id})
+          tweet
+        end
+        ret_val = flatten(tweets) |> Enum.sort_by(&(elem(&1, 1)))
+        {:reply, {:ok, ret_val}, state}
+      else
+        {:reply, {:bad, "Hashtag must begin with hash."}, state}
+      end
+    else
+      {:reply, {:bad, "Hashtag cannot be empty"}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:GetMyMention, name, password}, _from, state) do
+    {server_pid, _} = getDS(name, state)
+    {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+    if result == :ok && (validateUser(name, password, user)) do
+      tweets=
+        for {ds_pos, tweet_id}<-user.userMention do
+          {:ok, tweet} = GenServer.call(Enum.at(state.userDataMap, ds_pos), {:GetTweet, tweet_id})
+          tweet
+        end
+      ret_val = flatten(tweets) |> Enum.sort_by(&(elem(&1, 1)))
+      {:reply, {:ok, ret_val}, state}
+    else
+      {:reply, {:bad, "Invalid user id or password"}, state}
     end
   end
 end

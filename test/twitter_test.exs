@@ -251,7 +251,139 @@ defmodule TwitterTest do
     assert response==:redirect
     {ret, reason} = GenServer.call(data, {:GetSubscribedTweet, "ranbir", "roshan"})
     assert ret == :ok
-    IO.inspect(reason)
     #assert reason == "Success"
+  end
+
+  test "Get Tweets By HashTag" do
+    {:ok, server_pid} = GenServer.start(Twitter, %{})
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "ranbir", "roshan"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "jay", "patel"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "jay", "patel"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:PostTweet, "ranbir", "roshan", "My first tweet."})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:PostTweet, "ranbir", "roshan", "My first tweet #cool."})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:GetTweetsByHashTag, "#cool"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetTweetsByHashTag, "#cool"})
+    assert ret == :ok
+    assert Enum.count(reason) == 1
+    [{posted_by, _a, tweet}] = reason
+    assert posted_by == "ranbir"
+    assert tweet == "My first tweet #cool."
+
+    {response, data} = GenServer.call(server_pid, {:GetTweetsByHashTag, ""})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetTweetsByHashTag, ""})
+    assert ret == :bad
+    assert reason == "Hashtag cannot be empty"
+
+    {response, data} = GenServer.call(server_pid, {:GetTweetsByHashTag, ""})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetTweetsByHashTag, ""})
+    assert ret == :bad
+    assert reason == "Hashtag cannot be empty"
+
+
+    {response, data} = GenServer.call(server_pid, {:PostTweet, "jay", "patel", "i am a #rockstar #cool."})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:PostTweet, "jay", "patel", "i am a #rockstar #cool."})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:GetTweetsByHashTag, "#cool"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetTweetsByHashTag, "#cool"})
+    assert ret == :ok
+    assert Enum.count(reason) == 2
+    [{posted_by, _a, tweet}, {posted_by_2, _b, tweet_2}] = reason
+    assert posted_by == "ranbir"
+    assert tweet == "My first tweet #cool."
+    assert posted_by_2 == "jay"
+    assert tweet_2 == "i am a #rockstar #cool."
+
+
+    {response, data} = GenServer.call(server_pid, {:GetTweetsByHashTag, "#rockstar"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetTweetsByHashTag, "#rockstar"})
+    assert ret == :ok
+    assert Enum.count(reason) == 1
+    [{posted_by_2, _b, tweet_2}] = reason
+    assert posted_by_2 == "jay"
+    assert tweet_2 == "i am a #rockstar #cool."
+  end
+
+  test "Get self mention" do
+    {:ok, server_pid} = GenServer.start(Twitter, %{})
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "ranbir", "roshan"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "sid", "jain"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "sid", "jain"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "jay", "patel"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "jay", "patel"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:PostTweet, "ranbir", "roshan", "My first tweet."})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:PostTweet, "ranbir", "roshan", "My first tweet #cool."})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:PostTweet, "jay", "patel", "i am a #rockstar #cool @ranbir."})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:PostTweet, "jay", "patel", "i am a #rockstar #cool @ranbir."})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:GetMyMention, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetMyMention, "ranbir", "roshan"})
+    assert ret == :ok
+    assert Enum.count(reason) == 1
+    [{posted_by_2, _b, tweet_2}] = reason
+    assert posted_by_2 == "jay"
+    assert tweet_2 == "i am a #rockstar #cool @ranbir."
+
+
+    {response, data} = GenServer.call(server_pid, {:PostTweet, "sid", "jain", "what a good day @ranbir."})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:PostTweet, "sid", "jain", "what a good day @ranbir."})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:GetMyMention, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetMyMention, "ranbir", "roshan"})
+    assert ret == :ok
+    assert Enum.count(reason) == 2
+    [{posted_by_2, _b, tweet_2}, {posted_by_3, _a, tweet_3}] = reason
+    assert posted_by_2 == "jay"
+    assert tweet_2 == "i am a #rockstar #cool @ranbir."
+    assert posted_by_3 == "sid"
+    assert tweet_3 == "what a good day @ranbir."
+
   end
 end

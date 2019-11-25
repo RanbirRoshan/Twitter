@@ -64,4 +64,14 @@ defmodule Twitter do
     redirectionData(state)
   end
 
+  @impl true
+  def handle_call({:GetTweetsByHashTag, hashTag}, _from, state) do
+    redirectionData(state)
+  end
+
+  @impl true
+  def handle_call({:GetMyMention, username, password}, _from, state) do
+    redirectionData(state)
+  end
+
 end

@@ -1,5 +1,5 @@
 defmodule UserInfo do
-  defstruct userId: "", password: "", tweets: [], subscribedTo: [], userDeleted: false
+  defstruct userId: "", password: "", tweets: [], subscribedTo: [], userDeleted: false, userMention: []
 end
 
 defmodule UserDataServer do
@@ -14,7 +14,8 @@ defmodule UserDataServer do
   def init(init_arg) do
     user_table = :ets.new(:user_lookup, [:set, :protected])
     tweet_table = :ets.new(:tweet_lookup, [:set, :protected])
-    state = %{:userTable => user_table, :tweetTable => tweet_table, :tweetCount => 0}
+    hash_table = :ets.new(:hash_lookup, [:set, :protected])
+    state = %{:userTable => user_table, :tweetTable => tweet_table, :hashTable => hash_table, :tweetCount => 0}
     {:ok, state}
   end
 
@@ -76,5 +77,41 @@ defmodule UserDataServer do
     else
       {:reply, {:bad, "Invalid User ID"}, state}
     end
+  end
+
+  @impl true
+  def handle_call({:AddHashTagData, hash, tweet_server, tweet_id}, _from, state) do
+    data = :ets.lookup(state.hashTable, hash)
+    if Enum.count(data) > 0 do
+      {hash, tweetList} = Enum.at(data, 0)
+      :ets.insert(state.hashTable, {hash, tweetList ++ [{tweet_server, tweet_id}]})
+    else
+      :ets.insert_new(state.hashTable, {hash, [{tweet_server, tweet_id}]})
+    end
+    {:reply, {:ok, "Success"}, state}
+  end
+
+  @impl true
+  def handle_call({:GetHashTagData, hashtag}, _from, state) do
+    data = :ets.lookup(state.hashTable, hashtag)
+    if Enum.count(data) > 0 do
+      {hash, tweetList} = Enum.at(data, 0)
+      {:reply, {:ok, tweetList}, state}
+    else
+      {:reply, {:ok, []}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:AddUserMention, username, tweet_server, tweet_id}, _from, state) do
+    data = :ets.lookup(state.userTable, username)
+    if Enum.count(data) > 0 do
+      {_name, user} = Enum.at(data, 0)
+      if user.userDeleted == false do
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: user.userDeleted, userMention: user.userMention++[{tweet_server, tweet_id}]}
+        :ets.insert(state.userTable, {username, updateUserInfo})
+      end
+    end
+    {:reply, {:ok, "Success"}, state}
   end
 end
