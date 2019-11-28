@@ -77,7 +77,6 @@ defmodule TwitterCoreServer do
     end
   end
 
-
   def getDS(word, state) do
     pos = hd(String.to_charlist(String.at(word, 0))) - hd('a')
     if (pos >=0 && pos<=25) do

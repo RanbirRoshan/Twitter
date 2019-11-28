@@ -7,8 +7,13 @@ defmodule Twitter.MixProject do
       version: "0.1.0",
       elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
+      escript: escript_config(),
       deps: deps()
     ]
+  end
+
+  defp escript_config do
+    [main_module: MainMod]
   end
 
   # Run "mix help compile.app" to learn about applications.
