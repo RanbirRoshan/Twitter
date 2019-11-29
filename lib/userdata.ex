@@ -1,5 +1,5 @@
 defmodule UserInfo do
-  defstruct userId: "", password: "", tweets: [], subscribedTo: [], userDeleted: false, userMention: []
+  defstruct userId: "", password: "", tweets: [], subscribedTo: [], userDeleted: false, userMention: [], userPid: nil
 end
 
 defmodule UserDataServer do
@@ -38,6 +38,32 @@ defmodule UserDataServer do
     if Enum.count(data) > 0 do
       :ets.delete(state.userTable, userId)
       {:reply, {:ok, "Success"}, state}
+    else
+      {:reply, {:bad, "Invalid User ID"}, state}
+    end
+  end
+
+
+  @impl true
+  def handle_call({:AddLogoutDetail, userId}, _from, state) do
+    data = :ets.lookup(state.userTable, userId)
+    if Enum.count(data) > 0 do
+      {_id, user} = Enum.at(data, 0)
+      updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: user.userDeleted, userMention: user.userMention, userPid: nil}
+      :ets.insert(state.userTable, {userId, updateUserInfo})
+      {:reply, {:ok, "success"}, state}
+    else
+      {:reply, {:bad, "Invalid User ID"}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:AddLoginDetail, userId, userpid}, _from, state) do
+    data = :ets.lookup(state.userTable, userId)
+    if Enum.count(data) > 0 do
+      {_id, user} = Enum.at(data, 0)
+      updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: user.userDeleted, userMention: user.userMention, userPid: userpid}
+      :ets.insert(state.userTable, {userId, updateUserInfo})
     else
       {:reply, {:bad, "Invalid User ID"}, state}
     end
@@ -108,7 +134,7 @@ defmodule UserDataServer do
     if Enum.count(data) > 0 do
       {_name, user} = Enum.at(data, 0)
       if user.userDeleted == false do
-        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: user.userDeleted, userMention: user.userMention++[{tweet_server, tweet_id}]}
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: user.userDeleted, userMention: user.userMention++[{tweet_server, tweet_id}], userPid: user.userPid}
         :ets.insert(state.userTable, {username, updateUserInfo})
       end
     end

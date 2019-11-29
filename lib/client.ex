@@ -52,33 +52,62 @@ defmodule Client do
     end
   end
 
+  def performRetweet(state) do
+    {ret, data} = sendInfoToServer(state.server_id, {:GetSubscribedTweet, state.name, state.password}, false)
+    if (Enum.count(data) == 0) do
+      false
+    else
+      data = {:ReTweet, state.name, state.password, Enum.at(data,:rand.uniform(Enum.count(data))-1)}
+      {:ok, data} = sendInfoToServer(state.server_id, data, false)
+      Logger.info("Retweet action successful")
+      true
+    end
+  end
+
   def getAllTweets(state) do
     {ret, data} = sendInfoToServer(state.server_id, {:GetSubscribedTweet, state.name, state.password}, false)
-    Logger.info("Number of tweets (ID: #{state.myId}): #{inspect Enum.count(data)}")
+    Logger.info("Total number of tweets on wall (ID: #{state.myId}): #{inspect Enum.count(data)}")
   end
 
   def getAllTags(state) do
     for tag <- state.hash_tag_list do
       {ret, data} = sendInfoToServer(state.server_id, {:GetTweetsByHashTag, tag}, false)
-      IO.puts("Number of tweets (ID: #{state.myId}, Tag: #{tag}): #{inspect Enum.count(data)}")
+      Logger.info("No of tweets by hashtag (ID: #{state.myId}, Tag: #{tag}): #{inspect Enum.count(data)}")
     end
+  end
+
+  def subscribeRandomUser(state) do
+    {name, _} = Enum.random(state.userDataMap)
+    sendInfoToServer(state.server_id, {:SubscribeUser, state.name, state.password, name}, false)
   end
 
   def getAllMentions(state) do
     {ret, data} = sendInfoToServer(state.server_id, {:GetMyMention, state.name, state.password}, false)
-    IO.puts("Number of tweets mentions (ID: #{state.myId}): #{inspect Enum.count(data)}")
+    Logger.info("Number of tweets mentions (ID: #{state.myId}): #{inspect Enum.count(data)}")
   end
 
   def startWorking(state, max_wait_time_milli_sec) do
     if (state.tweet_count > 0) do
       chance = :rand.uniform(100)
       if chance < 40 do
-        #Logger.info("send tweet #{chance}")
-        state = %{state | :tweet_count => state.tweet_count - 1}
-        words = 10 + :rand.uniform(20)
 
-        tweet = getRandomTweet(words, "", state.hash_tag_list, state.userDataMap)
-        sendInfoToServer(state.server_id, {:PostTweet, state.name, state.password, tweet}, false)
+        chance = :rand.uniform(100)
+        change =
+        if chance > 20 do
+          #Logger.info("send tweet #{chance}")
+          words = 10 + :rand.uniform(20)
+
+          tweet = getRandomTweet(words, "", state.hash_tag_list, state.userDataMap)
+          sendInfoToServer(state.server_id, {:PostTweet, state.name, state.password, tweet}, false)
+          1
+        else
+          if (performRetweet(state)) do
+            1
+          else
+            0
+          end
+        end
+        state = %{state | :tweet_count => state.tweet_count - change}
         Process.sleep(:rand.uniform(max_wait_time_milli_sec))
         startWorking(state, max_wait_time_milli_sec)
       else
@@ -92,6 +121,9 @@ defmodule Client do
         end
         if  chance <= 40 do
             getAllMentions(state)
+        end
+        if  chance <= 15 do
+          subscribeRandomUser(state)
         end
         Process.sleep(:rand.uniform(max_wait_time_milli_sec))
         startWorking(state, max_wait_time_milli_sec)

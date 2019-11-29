@@ -29,7 +29,7 @@ defmodule TwitterCoreServer do
     tags = List.flatten(Regex.scan(hashregex,tweet))
     hashregex = ~r/\@\w+/
     mentions = List.flatten(Regex.scan(hashregex,tweet))
-    {tags,mentions}
+    {Enum.uniq(tags),Enum.uniq(mentions)}
   end
 
   def validateUser(name, password, userObj) do
@@ -101,7 +101,7 @@ defmodule TwitterCoreServer do
 
     if ret == :ok do
       {server_pid, _} = getDS(name, state)
-      newUser = %UserInfo{userId: name, password: password, tweets: [], subscribedTo: []}
+      newUser = %UserInfo{userId: name, password: password, tweets: [], subscribedTo: [], userDeleted: false, userMention: [], userPid: nil}
       {ret, reason} = GenServer.call(server_pid, {:CreateUser, newUser})
       {:reply, {ret, reason}, state}
     else
@@ -111,6 +111,11 @@ defmodule TwitterCoreServer do
 
   @impl true
   def handle_call({:Login, _name, _password}, _from, state) do
+    {:reply, {:ok, "stub"}, state}
+  end
+
+  @impl true
+  def handle_call({:Logout, _name, _password}, _from, state) do
     {:reply, {:ok, "stub"}, state}
   end
 
@@ -125,7 +130,7 @@ defmodule TwitterCoreServer do
         {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
         {hashtag, mentions} = getHashtagAndMentions(tweet)
         postHashTagAndMentions(hashtag, mentions, state, ds_pos, tweet_id)
-        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo}
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention}
         {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
       else
         {:reply, {:bad, "Invalid user id or password"}, state}
@@ -143,7 +148,7 @@ defmodule TwitterCoreServer do
       {result, user} = GenServer.call(server_pid, {:GetUserById, name})
       if result == :ok && user.userDeleted == false do
         if (validateUser(name, password, user)) do
-          updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: true}
+          updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: true,userMention: user.userMention, userPid: nil}
           GenServer.call(server_pid, {:UpdateUser, updateUserInfo})
           {:reply, {:ok, "Success"}, state}
         else
@@ -201,23 +206,27 @@ defmodule TwitterCoreServer do
       {result, user} = GenServer.call(server_pid, {:GetUserById, name})
       {sub_server_pid, _} = getDS(subscribeUserName, state)
       {sub_result, sub_user} = GenServer.call(sub_server_pid, {:GetUserById, subscribeUserName})
-      if sub_result == :ok && sub_user.userDeleted == false do
-        if result == :ok do
-          if (validateUser(name, password, user)) do
-            if !(Enum.member?(user.subscribedTo, subscribeUserName)) do
-              updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo++[subscribeUserName]}
-              {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
+      if (user != sub_user) do
+        if sub_result == :ok && sub_user.userDeleted == false do
+          if result == :ok do
+            if (validateUser(name, password, user)) do
+              if !(Enum.member?(user.subscribedTo, subscribeUserName)) do
+                updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo++[subscribeUserName], userMention: user.userMention, userPid: user.userPid, userDeleted: user.userDeleted}
+                {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
+              else
+                {:reply, {:bad, "Already Subscribed to user"}, state}
+              end
             else
-              {:reply, {:bad, "Already Subscribed to user"}, state}
+              {:reply, {:bad, "Invalid user id or password"}, state}
             end
           else
             {:reply, {:bad, "Invalid user id or password"}, state}
           end
         else
-          {:reply, {:bad, "Invalid user id or password"}, state}
+          {:reply, {:bad, "User being subscribed does not have an account"}, state}
         end
       else
-        {:reply, {:bad, "User being subscribed does not have an account"}, state}
+        {:reply, {:bad, "Subscibing self is not allowed."}, state}
       end
     else
       {:reply, {:bad, "Subscibing user name cannot be empty"}, state}
@@ -260,6 +269,29 @@ defmodule TwitterCoreServer do
       {:reply, {:ok, ret_val}, state}
     else
       {:reply, {:bad, "Invalid user id or password"}, state}
+    end
+  end
+
+  @impl true
+  def handle_call({:ReTweet, name, password, old_tweet_data}, _from, state) do
+    {_,_,tweet}=old_tweet_data
+    tweet = stringTrim(tweet)
+    if isStringNonEmpty(tweet) && isStringNonEmpty(name) do
+      {server_pid, _} = getDS(name, state)
+      {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+      if result == :ok && (validateUser(name, password, user)) do
+        tweet = "Retweet: " <> tweet
+        {tweet_server_pid, ds_pos} = getDS(convertToLower(tweet), state)
+        {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
+        {hashtag, mentions} = getHashtagAndMentions(tweet)
+        postHashTagAndMentions(hashtag, mentions, state, ds_pos, tweet_id)
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention}
+        {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
+      else
+        {:reply, {:bad, "Invalid user id or password"}, state}
+      end
+    else
+      {:reply, {:bad, "Tweets cannot be empty"}, state}
     end
   end
 end

@@ -40,7 +40,17 @@ defmodule Twitter do
   end
 
   @impl true
+  def handle_call({:Logout, _name, _password}, _from, state) do
+    redirectionData(state)
+  end
+
+  @impl true
   def handle_call({:Login, _name, _password}, _from, state) do
+    redirectionData(state)
+  end
+
+  @impl true
+  def handle_call({:ReTweet, _name, _password, _old_tweet_data}, _from, state) do
     redirectionData(state)
   end
 

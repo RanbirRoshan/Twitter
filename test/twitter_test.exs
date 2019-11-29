@@ -386,4 +386,52 @@ defmodule TwitterTest do
     assert tweet_3 == "what a good day @ranbir."
 
   end
+
+  test "retweet & get tweet test" do
+    {:ok, server_pid} = GenServer.start(Twitter, %{})
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "ranbir", "roshan"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:RegisterUser, "jay", "patel"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:RegisterUser, "jay", "patel"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:PostTweet, "jay", "patel", "My first tweet."})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:PostTweet, "jay", "patel", "My first tweet #cool."})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:SubscribeUser, "ranbir", "roshan", "jay"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:SubscribeUser, "ranbir", "roshan", "jay"})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:GetSubscribedTweet, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetSubscribedTweet, "ranbir", "roshan"})
+    assert ret == :ok
+    assert Enum.count(reason) == 1
+
+    {response, data} = GenServer.call(server_pid, {:ReTweet, "ranbir", "roshan", Enum.at(reason,0)})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:ReTweet, "ranbir", "roshan", Enum.at(reason,0)})
+    assert ret == :ok
+    assert reason == "Success"
+
+    {response, data} = GenServer.call(server_pid, {:GetSubscribedTweet, "ranbir", "roshan"})
+    assert response==:redirect
+    {ret, reason} = GenServer.call(data, {:GetSubscribedTweet, "ranbir", "roshan"})
+    assert ret == :ok
+    assert Enum.count(reason) == 1
+
+
+  end
 end
