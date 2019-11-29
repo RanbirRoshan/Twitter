@@ -146,8 +146,15 @@ defmodule Client do
   end
 
   @impl true
+  def handle_cast({:Notification, data}, state) do
+    Logger.info("Notification Received: " <> data)
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_call({:createAccount}, _from, state) do
     ret = sendInfoToServer(state.server_id, {:RegisterUser, state.name, state.password}, false)
+    ret = sendInfoToServer(state.server_id, {:Login, state.name, state.password}, false)
     {:reply, ret, state}
   end
 

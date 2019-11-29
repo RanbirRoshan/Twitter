@@ -1,4 +1,3 @@
-
 defmodule MainMod do
   require Logger
 
@@ -10,7 +9,10 @@ defmodule MainMod do
   end
 
   def main(args \\ []) do
-    {:ok, server_id} = GenServer.start(NewMain, %{})
+    [num_user, num_tweet] = args
+    {num_user, _} = Integer.parse(num_user)
+    {num_tweet, _} = Integer.parse(num_tweet)
+    {:ok, server_id} = GenServer.start(NewMain, {num_user, num_tweet})
     GenServer.cast(server_id, {:start})
     waitForCompletion(server_id)
     Process.sleep(10000)
@@ -23,15 +25,16 @@ defmodule NewMain do
   # Dosassignment2]
   @alphabets "abcdefghijklmnopqrstuvwxyz"
   @follow_count_percent 0.30
-  @tweet_count 500
+  #@tweet_count 500
   @hash_tag_list_size 2 #100
   @max_hash_count_per_msg 10
-  @number_of_users  25 #100
+  #@number_of_users  25 #100
   @max_wait_time_milli_sec 200
 
   @impl true
   def init(init_arg) do
-    state = %{:num_start_end_pending => @number_of_users}
+    {num_user, num_tweet} = init_arg
+    state = %{:num_start_end_pending => num_user, :numUser=>num_user, :numMsg=>num_tweet}
     {:ok, state}
   end
 
@@ -76,13 +79,13 @@ defmodule NewMain do
     end
   end
 
-  def createClientAccount(count, server_id, list_user, client_list, hash_tag_list) do
+  def createClientAccount(count, server_id, list_user, client_list, hash_tag_list, numMsg) do
     if (count > 0) do
       follow_count = Enum.count(list_user) * @follow_count_percent
-      data = {count-1, list_user, follow_count, @tweet_count, hash_tag_list, server_id, self(), @max_hash_count_per_msg}
+      data = {count-1, list_user, follow_count, numMsg, hash_tag_list, server_id, self(), @max_hash_count_per_msg}
       {:ok, client_pid} = GenServer.start(Client, data)
       GenServer.call(client_pid, {:createAccount})
-      createClientAccount(count-1, server_id, list_user, client_list ++ [client_pid], hash_tag_list)
+      createClientAccount(count-1, server_id, list_user, client_list ++ [client_pid], hash_tag_list, numMsg)
     else
       client_list
     end
@@ -112,10 +115,10 @@ defmodule NewMain do
 
   @impl true
   def handle_cast({:start}, state) do
-    userid_pwd_list = createRandomUserIdPassowrd(@number_of_users, [])
+    userid_pwd_list = createRandomUserIdPassowrd(state.numUser, [])
     {:ok, server_id} = GenServer.start(Twitter, %{})
     hash_list   = generateHashTagList(@hash_tag_list_size, [])
-    client_list = createClientAccount(@number_of_users, server_id, userid_pwd_list, [], hash_list)
+    client_list = createClientAccount(state.numUser, server_id, userid_pwd_list, [], hash_list, state.numMsg)
     startClient(client_list, 0)
     IO.inspect(client_list)
     {:noreply, state}

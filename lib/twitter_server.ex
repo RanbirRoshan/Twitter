@@ -110,13 +110,44 @@ defmodule TwitterCoreServer do
   end
 
   @impl true
-  def handle_call({:Login, _name, _password}, _from, state) do
-    {:reply, {:ok, "stub"}, state}
+  def handle_call({:Login, name, password}, from, state) do
+    name = convertToLower(stringTrim(name))
+    if isStringNonEmpty(name) do
+      {server_pid, _} = getDS(name, state)
+      {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+      if result == :ok && user.userDeleted == false do
+        if (validateUser(name, password, user)) do
+          {pid, _} = from
+          {:reply, GenServer.call(server_pid ,{:AddLoginDetail, name, pid}), state}
+        else
+          {:reply, {:bad, "Invalid user id or password"}, state}
+        end
+      else
+        {:reply, {:bad, "Invalid user id or password"}, state}
+      end
+    else
+      {:reply, {:bad, "User Id cannot be empty"}, state}
+    end
   end
 
   @impl true
-  def handle_call({:Logout, _name, _password}, _from, state) do
-    {:reply, {:ok, "stub"}, state}
+  def handle_call({:Logout, name, password}, _from, state) do
+    name = convertToLower(stringTrim(name))
+    if isStringNonEmpty(name) do
+      {server_pid, _} = getDS(name, state)
+      {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+      if result == :ok && user.userDeleted == false do
+        if (validateUser(name, password, user)) do
+          {:reply, GenServer.call(server_pid, {:AddLoginDetail, name, nil}), state}
+        else
+          {:reply, {:bad, "Invalid user id or password"}, state}
+        end
+      else
+        {:reply, {:bad, "Invalid user id or password"}, state}
+      end
+    else
+      {:reply, {:bad, "User Id cannot be empty"}, state}
+    end
   end
 
   @impl true
@@ -130,7 +161,13 @@ defmodule TwitterCoreServer do
         {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
         {hashtag, mentions} = getHashtagAndMentions(tweet)
         postHashTagAndMentions(hashtag, mentions, state, ds_pos, tweet_id)
-        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention}
+        for subs <- user.subscribedBy do
+          {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+          if (user.userDeleted == false && user.userPid != nil) do
+            GenServer.cast(user.userPid, {:Notification, "New tweet posted by " <> name <> " Tweet: " <> tweet})
+          end
+        end
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention, subscribedBy: user.subscribedBy}
         {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
       else
         {:reply, {:bad, "Invalid user id or password"}, state}
@@ -148,7 +185,7 @@ defmodule TwitterCoreServer do
       {result, user} = GenServer.call(server_pid, {:GetUserById, name})
       if result == :ok && user.userDeleted == false do
         if (validateUser(name, password, user)) do
-          updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: true,userMention: user.userMention, userPid: nil}
+          updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo, userDeleted: true,userMention: user.userMention, userPid: nil, subscribedBy: user.subscribedBy}
           GenServer.call(server_pid, {:UpdateUser, updateUserInfo})
           {:reply, {:ok, "Success"}, state}
         else
@@ -211,7 +248,9 @@ defmodule TwitterCoreServer do
           if result == :ok do
             if (validateUser(name, password, user)) do
               if !(Enum.member?(user.subscribedTo, subscribeUserName)) do
-                updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo++[subscribeUserName], userMention: user.userMention, userPid: user.userPid, userDeleted: user.userDeleted}
+                updateUserInfo = %UserInfo{userId: sub_user.userId, password: sub_user.password, tweets: sub_user.tweets, subscribedTo: sub_user.subscribedTo, userMention: sub_user.userMention, userPid: sub_user.userPid, userDeleted: sub_user.userDeleted, subscribedBy: sub_user.subscribedBy++[name]}
+                GenServer.call(sub_server_pid, {:UpdateUser, updateUserInfo})
+                updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets, subscribedTo: user.subscribedTo++[subscribeUserName], userMention: user.userMention, userPid: user.userPid, userDeleted: user.userDeleted, subscribedBy: user.subscribedBy}
                 {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
               else
                 {:reply, {:bad, "Already Subscribed to user"}, state}
@@ -285,7 +324,7 @@ defmodule TwitterCoreServer do
         {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
         {hashtag, mentions} = getHashtagAndMentions(tweet)
         postHashTagAndMentions(hashtag, mentions, state, ds_pos, tweet_id)
-        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention}
+        updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention, subscribedBy: user.subscribedBy}
         {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
       else
         {:reply, {:bad, "Invalid user id or password"}, state}
