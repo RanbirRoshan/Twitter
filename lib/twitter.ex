@@ -12,7 +12,7 @@ defmodule Twitter do
         pid
       end
 
-    num_processor = 512
+    num_processor = 1024
     data_processing_server_list =
       for _i <- 1..num_processor do
         {:ok, pid} = GenServer.start(TwitterCoreServer, database_shard_list)

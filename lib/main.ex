@@ -2,7 +2,7 @@ defmodule MainMod do
   require Logger
 
   def waitForCompletion(server_id) do
-    if GenServer.call(server_id, {:isDone}, 999999999)==true do
+    if GenServer.call(server_id, {:isDone}, 999999999)==false do
       Process.sleep(500)
       waitForCompletion(server_id)
     end
@@ -19,7 +19,7 @@ defmodule MainMod do
     waitForCompletion(server_id)
     {_, wall_clock} = :erlang.statistics(:wall_clock)
     Process.sleep(10000)
-    IO.puts("Total time for convergence: #{wall_clock} seconds")
+    Logger.info("Total time for convergence: #{wall_clock} seconds")
   end
 end
 
@@ -104,7 +104,7 @@ defmodule NewMain do
 
   @impt true
   def handle_call({:InformStartCompletion}, _from, state) do
-    state = %{state| :num_start_end_pending => state.num_start_end_pending -1}
+    state = %{state| :num_start_end_pending => state.num_start_end_pending-1}
     {:reply, :ok, state}
   end
 
@@ -113,7 +113,7 @@ defmodule NewMain do
     if (state.num_start_end_pending > 0) do
       {:reply, false, state}
     else
-      {:reply, false, state}
+      {:reply, true, state}
     end
   end
 
