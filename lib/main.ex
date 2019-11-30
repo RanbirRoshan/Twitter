@@ -2,7 +2,7 @@ defmodule MainMod do
   require Logger
 
   def waitForCompletion(server_id) do
-    if GenServer.call(server_id, {:isDone})==true do
+    if GenServer.call(server_id, {:isDone}, 999999999)==true do
       Process.sleep(500)
       waitForCompletion(server_id)
     end
@@ -13,9 +13,13 @@ defmodule MainMod do
     {num_user, _} = Integer.parse(num_user)
     {num_tweet, _} = Integer.parse(num_tweet)
     {:ok, server_id} = GenServer.start(NewMain, {num_user, num_tweet})
+
+    :erlang.statistics(:wall_clock)
     GenServer.cast(server_id, {:start})
     waitForCompletion(server_id)
+    {_, wall_clock} = :erlang.statistics(:wall_clock)
     Process.sleep(10000)
+    IO.puts("Total time for convergence: #{wall_clock} seconds")
   end
 end
 
@@ -29,7 +33,7 @@ defmodule NewMain do
   @hash_tag_list_size 2 #100
   @max_hash_count_per_msg 10
   #@number_of_users  25 #100
-  @max_wait_time_milli_sec 200
+  @max_wait_time_milli_sec 4
 
   @impl true
   def init(init_arg) do
@@ -73,7 +77,7 @@ defmodule NewMain do
       if (Enum.find_index(list,  fn({username, _password}) -> username == username_new end)) == nil do
         createRandomUserIdPassowrd(count-1, list ++ [{username_new, password}])
       else
-        IO.puts("found")
+        #IO.puts("found")
         createRandomUserIdPassowrd(count, list)
       end
     end
@@ -120,10 +124,7 @@ defmodule NewMain do
     hash_list   = generateHashTagList(@hash_tag_list_size, [])
     client_list = createClientAccount(state.numUser, server_id, userid_pwd_list, [], hash_list, state.numMsg)
     startClient(client_list, 0)
-    IO.inspect(client_list)
+    #IO.inspect(client_list)
     {:noreply, state}
   end
-
-
-
 end

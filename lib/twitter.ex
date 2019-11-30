@@ -12,13 +12,14 @@ defmodule Twitter do
         pid
       end
 
+    num_processor = 512
     data_processing_server_list =
-      for _i <- 1..26 do
+      for _i <- 1..num_processor do
         {:ok, pid} = GenServer.start(TwitterCoreServer, database_shard_list)
         pid
       end
 
-    state = %{:dataShards => database_shard_list, :dataShardCount=>27, :processors=>data_processing_server_list, :processorCount=>26, :lastProcessorServer => 0}
+    state = %{:dataShards => database_shard_list, :dataShardCount=>27, :processors=>data_processing_server_list, :processorCount=>num_processor, :lastProcessorServer => 0}
 
     {:ok, state}
   end
@@ -31,6 +32,7 @@ defmodule Twitter do
     nextProcessorPos = state.lastProcessorServer
     state = %{state | :lastProcessorServer => rem(state.lastProcessorServer+1, state.processorCount)}
     nextProcessorpid = Enum.at(state.processors, nextProcessorPos)
+    #IO.inspect(nextProcessorpid)
     {:reply, {:redirect, nextProcessorpid}, state}
   end
 

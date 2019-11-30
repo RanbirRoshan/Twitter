@@ -59,20 +59,20 @@ defmodule Client do
     else
       data = {:ReTweet, state.name, state.password, Enum.at(data,:rand.uniform(Enum.count(data))-1)}
       {:ok, data} = sendInfoToServer(state.server_id, data, false)
-      Logger.info("Retweet action successful")
+      #Logger.info("Retweet action successful")
       true
     end
   end
 
   def getAllTweets(state) do
     {ret, data} = sendInfoToServer(state.server_id, {:GetSubscribedTweet, state.name, state.password}, false)
-    Logger.info("Total number of tweets on wall (ID: #{state.myId}): #{inspect Enum.count(data)}")
+    #Logger.info("Total number of tweets on wall (ID: #{state.myId}): #{inspect Enum.count(data)}")
   end
 
   def getAllTags(state) do
     for tag <- state.hash_tag_list do
       {ret, data} = sendInfoToServer(state.server_id, {:GetTweetsByHashTag, tag}, false)
-      Logger.info("No of tweets by hashtag (ID: #{state.myId}, Tag: #{tag}): #{inspect Enum.count(data)}")
+      #Logger.info("No of tweets by hashtag (ID: #{state.myId}, Tag: #{tag}): #{inspect Enum.count(data)}")
     end
   end
 
@@ -83,7 +83,7 @@ defmodule Client do
 
   def getAllMentions(state) do
     {ret, data} = sendInfoToServer(state.server_id, {:GetMyMention, state.name, state.password}, false)
-    Logger.info("Number of tweets mentions (ID: #{state.myId}): #{inspect Enum.count(data)}")
+    #Logger.info("Number of tweets mentions (ID: #{state.myId}): #{inspect Enum.count(data)}")
   end
 
   def startWorking(state, max_wait_time_milli_sec) do
@@ -94,7 +94,7 @@ defmodule Client do
         chance = :rand.uniform(100)
         change =
         if chance > 20 do
-          #Logger.info("send tweet #{chance}")
+          ##Logger.info("send tweet #{chance}")
           words = 10 + :rand.uniform(20)
 
           tweet = getRandomTweet(words, "", state.hash_tag_list, state.userDataMap)
@@ -136,7 +136,7 @@ defmodule Client do
   def sendInfoToServer(server_id, data, print) do
     {ret, ret_data} = GenServer.call(server_id, data)
     if print == true do
-      Logger.info("#{inspect {ret, ret_data, data}}")
+      #Logger.info("#{inspect {ret, ret_data, data}}")
     end
     if (ret == :redirect) do
       sendInfoToServer(ret_data, data, print)
@@ -147,7 +147,7 @@ defmodule Client do
 
   @impl true
   def handle_cast({:Notification, data}, state) do
-    Logger.info("Notification Received: " <> data)
+    #Logger.info("Notification Received: " <> data)
     {:noreply, state}
   end
 

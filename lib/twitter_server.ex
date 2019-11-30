@@ -324,6 +324,12 @@ defmodule TwitterCoreServer do
         {:ok, tweet_id} = GenServer.call(tweet_server_pid, {:Tweet, {name, DateTime.utc_now(), tweet}})
         {hashtag, mentions} = getHashtagAndMentions(tweet)
         postHashTagAndMentions(hashtag, mentions, state, ds_pos, tweet_id)
+        for subs <- user.subscribedBy do
+          {result, user} = GenServer.call(server_pid, {:GetUserById, name})
+          if (user.userDeleted == false && user.userPid != nil) do
+            GenServer.cast(user.userPid, {:Notification, "New tweet posted by " <> name <> " Tweet: " <> tweet})
+          end
+        end
         updateUserInfo = %UserInfo{userId: user.userId, password: user.password, tweets: user.tweets ++ [{ds_pos, tweet_id}], subscribedTo: user.subscribedTo, userPid: user.userPid, userDeleted: user.userDeleted, userMention: user.userMention, subscribedBy: user.subscribedBy}
         {:reply, GenServer.call(server_pid, {:UpdateUser, updateUserInfo}), state}
       else
